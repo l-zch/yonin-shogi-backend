@@ -37,176 +37,128 @@ class Game:
                 ch.id = c[0]
                 ch.belongto = i
                 self.create_threaten(ch, pos, i)
+                
+    def add_piece_to_set(self, pos, piece):
+        self.threaten_piece_at(pos).add(piece)
+        
+    def discard_piece_to_set(self, pos, piece):
+        self.threaten_piece_at(pos).discard(piece)
 
-    def create_threaten(self, piece, pos, only=False):
-        threaten_piece = copy(piece)
-        threaten_piece.init_threaten_piece(pos)
-        way = threaten_piece.belongto
-
-        #handle blocking rock range line
-        if not only:
-            for piece_r in self.threaten_piece_at(pos):
-                if piece_r.id == 'r':
-                    unit_way = Position.get_unit_way(piece_r.pos, pos)
-                    new_pos = pos + unit_way
-                    while new_pos.is_vaild_pos():
-                        self.threaten_piece_at(new_pos).discard(piece_r)
-                        if not self.piece_at(new_pos).is_empty_piece():
-                            break
-                        new_pos += unit_way
-
-        now_id = threaten_piece.id
-        if threaten_piece.id == 'r':
-            if threaten_piece.promoted:
-                for reachable in MOVEMENT['R']:
-                    new_pos = pos + reachable
-                    self.threaten_piece_at(new_pos).add(threaten_piece)
-            ways = MOVEMENT['r']
-            for w in ways:
-                new_pos = pos + w
+    def handle_rock_line(self, threaten_piece, pos, func2):
+        #handle blocking or unblocking rock range line
+        for piece_r in self.threaten_piece_at(pos):
+            if piece_r.id == 'r':
+                unit_way = Position.get_unit_way(piece_r.pos, pos)
+                new_pos = pos + unit_way
                 while new_pos.is_vaild_pos():
-                    self.threaten_piece_at(new_pos).add(threaten_piece)
+                    func2(new_pos, piece_r)
+                    self.threaten_piece_at(new_pos).discard(piece_r)
                     if not self.piece_at(new_pos).is_empty_piece():
                         break
-                    new_pos += w
-            if only:
-                return
-            #if a king in a row or a col
-            for player in self.players:
-                if player.id == self.current_player.id:
-                    continue
-                kp = player.king_pos
-                if kp.x == pos.x:
-                    unit_way = Position.get_unit_way(kp, pos)
-                    blockers = []
-                    new_pos = kp + unit_way
-                    while new_pos != pos:
-                        if not self.piece_at(new_pos).is_empty_piece():
-                            _ch = copy(self.piece_at(new_pos))
-                            _ch.init_threaten_piece(new_pos)
-                            blockers.append(_ch)
-                        new_pos += unit_way
-                    if len(blockers) != 1:
-                        continue
-                    if blockers[0].belongto == player.id:
-                        self.remove_threaten(blockers[0], blockers[0].pos,
-                                             True)
+                    new_pos += unit_way
 
-            return
-
+    def handle_rock_threaten(self, threaten_piece, pos, func1):
         if threaten_piece.promoted:
-            now_id = 'g'
+            for reachable in MOVEMENT['R']:
+                new_pos = pos + reachable
+                func1(new_pos, threaten_piece)
+        for w in MOVEMENT['r']:
+            new_pos = pos + w
+            while new_pos.is_vaild_pos():
+                func1(new_pos, threaten_piece)
+                if not self.piece_at(new_pos).is_empty_piece():
+                    break
+                new_pos += w
+
+    def handle_rock_king(self, pos):
+        #if a king in a row or a col
+        for player in self.players:
+            if player.id == self.current_player.id:
+                continue
+            kp = player.king_pos
+            if kp.x == pos.x:
+                unit_way = Position.get_unit_way(kp, pos)
+                blockers = []
+                new_pos = kp + unit_way
+                while new_pos != pos:
+                    if not self.piece_at(new_pos).is_empty_piece():
+                        _ch = copy(self.piece_at(new_pos))
+                        _ch.init_threaten_piece(new_pos)
+                        blockers.append(_ch)
+                    new_pos += unit_way
+                if len(blockers) != 1:
+                    continue
+                if blockers[0].belongto == player.id:
+                    self.remove_threaten(blockers[0], blockers[0].pos, True)
+            elif kp.y == pos.y:
+                unit_way = Position.get_unit_way(kp, pos)
+                blockers = []
+                new_pos = kp + unit_way
+                while new_pos != pos:
+                    if not self.piece_at(new_pos).is_empty_piece():
+                        _ch = copy(self.piece_at(new_pos))
+                        _ch.init_threaten_piece(new_pos)
+                        blockers.append(_ch)
+                    new_pos += unit_way
+                if len(blockers) != 1:
+                    continue
+                if blockers[0].belongto == player.id:
+                    self.remove_threaten(blockers[0], blockers[0].pos, True)
+
+    def handle_blocker(self, threaten_piece, pos, func1):
+        for unit_way in MOVEMENT['r']:
+            new_pos = pos + unit_way
+            blockers = []
+            while new_pos.is_vaild_pos():
+                ch = self.piece_at(new_pos)
+                if ch.id == 'r' and ch.belongto != threaten_piece.belongto:
+                    if len(blockers) != 1:
+                        break
+                    if blockers[0].belongto == threaten_piece.belongto:
+                        self.remove_threaten(blockers[0], blockers[0].pos, True)
+                        two_way = [unit_way, unit_way * -1]
+                        for w in two_way:
+                            if w in MOVEMENT[blockers[0].id]:
+                                func1(blockers[0].pos + w, blockers[0])
+                    break
+                elif not ch.is_empty_piece():
+                    _ch = copy(ch)
+                    _ch.init_threaten_piece(new_pos)
+                    blockers.append(_ch)
+                new_pos += unit_way
+
+    def handle_threaten(self, threaten_piece, pos, only, func1, func2):
+        way = threaten_piece.belongto
+        if not only:
+            self.handle_rock_line(threaten_piece, pos, func2)
+            
+        if threaten_piece.id == 'r':
+            self.handle_rock_threaten(threaten_piece, pos, func1)
+            if not only:
+                self.handle_rock_king(pos)
+            return
+        
+        now_id = 'g' if threaten_piece.promoted else threaten_piece.id
         for reachable in MOVEMENT[now_id]:
             _reachable = copy(reachable)
             _reachable.rotate(way)
             new_pos = pos + _reachable
-            self.threaten_piece_at(new_pos).add(threaten_piece)
+            func1(new_pos, threaten_piece)
 
         if threaten_piece.id == 'k':
-            for unit_way in MOVEMENT['r']:
-                new_pos = pos + unit_way
-                blockers = []
-                while new_pos.is_vaild_pos():
-                    ch = self.piece_at(new_pos)
-                    if ch.id == 'r' and ch.belongto != piece.belongto:
-                        if len(blockers) != 1:
-                            break
-                        if blockers[0].belongto == piece.belongto:
-                            self.remove_threaten(blockers[0], blockers[0].pos,
-                                                 True)
-                            two_way = [unit_way, unit_way * -1]
-                            for w in two_way:
-                                if w in MOVEMENT[blockers[0].id]:
-                                    self.threaten_piece_at(blockers[0].pos +
-                                                           w).add(blockers[0])
-                        break
-                    elif not ch.is_empty_piece():
-                        _ch = copy(ch)
-                        _ch.init_threaten_piece(new_pos)
-                        blockers.append(_ch)
-                    new_pos += unit_way
+            self.handle_blocker(threaten_piece, pos, func1)
+    
+    def create_threaten(self, piece, pos, only=False):
+        threaten_piece = copy(piece)
+        threaten_piece.init_threaten_piece(pos)
+
+        self.handle_threaten(threaten_piece, pos, only, self.add_piece_to_set, self.discard_piece_to_set)
 
     def remove_threaten(self, piece, pos, only=False):
         threaten_piece = copy(piece)
         threaten_piece.init_threaten_piece(pos)
-        way = threaten_piece.belongto
-
-        #handle blocking rock range line
-        if not only:
-            for piece_r in self.threaten_piece_at(pos):
-                if piece_r.id == 'r':
-                    unit_way = Position.get_unit_way(piece_r.pos, pos)
-                    new_pos = pos + unit_way
-                    while new_pos.is_vaild_pos():
-                        self.threaten_piece_at(new_pos).add(piece_r)
-                        if not self.piece_at(new_pos).is_empty_piece():
-                            break
-                        new_pos += unit_way
-
-        now_id = threaten_piece.id
-        if threaten_piece.id == 'r':
-            if threaten_piece.promoted:
-                for reachable in MOVEMENT['R']:
-                    new_pos = pos + reachable
-                    self.threaten_piece_at(new_pos).discard(threaten_piece)
-            ways = MOVEMENT['r']
-            for w in ways:
-                new_pos = pos + w
-                while new_pos.is_vaild_pos():
-                    self.threaten_piece_at(new_pos).discard(threaten_piece)
-                    if not self.piece_at(new_pos).is_empty_piece():
-                        break
-                    new_pos = new_pos + w
-            if only:
-                return
-            #if a king in a row or a col
-            for player in self.players:
-                if player.id == self.current_player.id:
-                    continue
-                kp = player.king_pos
-                if kp.x == pos.x:
-                    unit_way = Position.get_unit_way(kp, pos)
-                    blockers = []
-                    new_pos = kp + unit_way
-                    while new_pos != pos:
-                        if not self.piece_at(new_pos).is_empty_piece():
-                            _ch = copy(self.piece_at(new_pos))
-                            _ch.init_threaten_piece(new_pos)
-                            blockers.append(_ch)
-                        new_pos += unit_way
-                    sz = len(blockers)
-                    if sz != 1:
-                        continue
-                    if blockers[0].belongto == player.id:
-                        self.create_threaten(blockers[0], blockers[0].pos,
-                                             True)
-            return
-        if threaten_piece.promoted:
-            now_id = 'g'
-        for reachable in MOVEMENT[now_id]:
-            _reachable = copy(reachable)
-            _reachable.rotate(way)
-            new_pos = pos + _reachable
-            self.threaten_piece_at(new_pos).discard(threaten_piece)
-
-        if threaten_piece.id == 'k':
-            for unit_way in MOVEMENT['r']:
-                new_pos = pos + unit_way
-                blockers = []
-                while new_pos.is_vaild_pos():
-                    ch = self.piece_at(new_pos)
-                    if ch.id == 'r' and ch.belongto != piece.belongto:
-                        if len(blockers) != 1:
-                            break
-                        if blockers[0].belongto == piece.belongto:
-                            self.create_threaten(blockers[0], blockers[0].pos,
-                                                 True)
-                        break
-                    elif not ch.is_empty_piece():
-                        _ch = copy(ch)
-                        _ch.init_threaten_piece(new_pos)
-                        blockers.append(_ch)
-                    new_pos += unit_way
+        
+        self.handle_threaten(threaten_piece, pos, only, self.discard_piece_to_set, self.add_piece_to_set)
 
     def piece_at(self, pos):
         if not pos.is_vaild_pos():
@@ -220,7 +172,7 @@ class Game:
 
     #放子->合法性檢驗->王手檢驗->PASS
     def on_place(self, piece, from_pos, new_pos) -> bool:
-        debug = True
+        debug = False
         #vaildate pos
         if not from_pos.is_vaild_pos() and not from_pos.is_empty_pos():
             return False
@@ -234,15 +186,18 @@ class Game:
             return False
 
         _old = None
+        from_piece = None
         if not self.piece_at(new_pos).is_empty_piece():
             _old = copy(self.piece_at(new_pos))
+        if not from_pos.is_empty_pos() and not self.piece_at(from_pos).is_empty_piece():
+            from_piece = copy(self.piece_at(from_pos))
 
         #threaten
         if _old is not None:
             self.remove_threaten(_old, new_pos)
         self.board[new_pos.x][new_pos.y] = piece.empty_piece()
-        if not from_pos.is_empty_pos():
-            self.remove_threaten(piece, from_pos)
+        if from_piece is not None:
+            self.remove_threaten(from_piece, from_pos)
 
         #debug
         if debug:
@@ -284,9 +239,9 @@ class Game:
             if piece.id == 'k':
                 self.current_player.king_pos = from_pos
             self.remove_threaten(piece, new_pos)
-            if not from_pos.is_empty_pos():
-                self.board[from_pos.x][from_pos.y] = piece
-                self.create_threaten(piece, from_pos)
+            if from_piece is not None:
+                self.board[from_pos.x][from_pos.y] = from_piece
+                self.create_threaten(from_piece, from_pos)
             else:
                 self.current_player.holding_piece[piece.id] += 1
             if _old is not None:
@@ -413,8 +368,7 @@ class Game:
         if checked_player != -1:
             self.current_player = self.players[checked_player]
         else:
-            self.current_player = self.players[(self.current_player.id + 1) %
-                                               4]
+            self.current_player = self.players[(self.current_player.id + 1) % 4]
         if self.current_player.checkmated:
             self.next_turn()
 
