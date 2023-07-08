@@ -230,7 +230,7 @@ class Game:
         piece.belongto = self.current_player.id
 
         #vaildate move
-        if not self.is_valid_movement(piece, from_pos, new_pos):
+        if not self.is_vaild_place(piece, from_pos, new_pos):
             return False
 
         _old = None
@@ -308,7 +308,90 @@ class Game:
                 print('d' + str(i) + 'e')
         return True
 
-    def is_valid_movement(self, piece, from_pos, new_pos) -> bool:
+    def is_vaild_movement(self, piece, from_pos, new_pos):
+        if self.piece_at(from_pos).is_empty_piece():
+                return False
+        from_piece = self.piece_at(from_pos)
+        if (from_piece.belongto != piece.belongto or
+                #from_piece.promoted != piece.promoted or
+                from_piece.id != piece.id):
+            return False
+        if from_piece.promoted != piece.promoted:
+            if from_piece.promoted:
+                return False
+
+        facing = self.current_player.id
+        delta_pos = new_pos - from_pos
+        find = False
+        now_id = 'g' if from_piece.promoted else from_piece.id
+        if from_piece.id == 'r':
+            delta_pos = Position.get_unit_way(from_pos, new_pos)
+            now_id = 'R' if from_piece.promoted else now_id
+        for vaild_pos in MOVEMENT[now_id]:
+            _vaild_pos = copy(vaild_pos)
+            _vaild_pos.rotate(facing)
+            if delta_pos == _vaild_pos:
+                find = True
+        return find
+
+    def is_checkmate(self, piece, new_pos, king_pos):
+        can_eliminate_piece = False
+        can_escape_piece = False
+        king_piece = self.piece_at(king_pos)
+        for eat_piece in self.threaten_piece_at(new_pos):
+            if eat_piece.id == king_piece.belongto:
+                can_eliminate_piece = True
+                break
+        for reachable in MOVEMENT['k']:
+            king_can_go = king_pos + reachable
+            cant_go = False
+            for threating_piece in self.threaten_piece_at(king_can_go):
+                if threating_piece.id != king_piece.belongto:
+                    cant_go = True
+                    break
+            if not cant_go:
+                can_escape_piece = True
+                break
+        return can_eliminate_piece or can_escape_piece
+
+    def is_vaild_drop(self, piece, new_pos):
+        if not self.piece_at(new_pos).is_empty_piece():
+            return False
+        left_in_hand = self.current_player.holding_piece[piece.id]
+        if not left_in_hand or left_in_hand <= 0:
+            return False
+        if piece.promoted:
+            return False
+        if piece.id != 'p':
+            return True
+        facing = self.current_player.id
+        if facing % 2 == 0:
+            if ((new_pos.x == 0 and facing == 0)
+            or (new_pos.x == 8 and facing == 2)):
+                return False
+            for row in range(9):
+                ch = self.board[row][new_pos.y]
+                if ch.belongto == facing and ch.id == 'p':
+                    return False
+        else:
+            if ((new_pos.y == 8 and facing == 1)
+            or (new_pos.y == 0 and facing == 3)):
+                return False
+            for col in range(9):
+                ch = self.board[new_pos.x][col]
+                if ch.belongto == facing and ch.id == 'p':
+                    return False
+        unit_forward = Position(0, 1)
+        unit_forward.rotate(facing)
+        forward_pos = new_pos + unit_forward
+        forward_ch = self.piece_at(forward_pos)
+        if forward_ch.id == 'k' and forward_ch.belongto != facing:  #打步詰
+            return self.is_checkmate(piece, new_pos, forward_pos)
+        else:
+            return True
+    
+    
+    def is_vaild_place(self, piece, from_pos, new_pos) -> bool:
         # 檢查持駒or移動合法 f
         # 打步詰 f
         # 二步 f
@@ -317,83 +400,10 @@ class Game:
         # 若升變，升變是否合法
         if self.piece_at(new_pos).belongto == self.current_player.id:
             return False
-        way = self.current_player.id
         if from_pos.is_empty_pos():
-            if not self.piece_at(new_pos).is_empty_piece():
-                return False
-            left_in_hand = self.current_player.holding_piece[piece.id]
-            if not left_in_hand or left_in_hand <= 0:
-                return False
-            if piece.id == 'p':
-                if way % 2 == 0:
-                    if ((new_pos.x == 0 and way == 0)
-                            or (new_pos.x == 8 and way == 2)):
-                        return False
-                    for row in range(9):
-                        ch = self.board[row][new_pos.y]
-                        if ch.belongto == way and ch.id == 'p':
-                            return False
-                else:
-                    if ((new_pos.y == 8 and way == 1)
-                            or (new_pos.y == 0 and way == 3)):
-                        return False
-                    for col in range(9):
-                        ch = self.board[new_pos.x][col]
-                        if ch.belongto == way and ch.id == 'p':
-                            return False
-                unit_forward = Position(0, 1)
-                unit_forward.rotate(way)
-                forward_pos = new_pos + unit_forward
-                forward_ch = self.piece_at(forward_pos)
-                if forward_ch.id == 'k' and forward_ch.belongto != way:  #打步詰
-                    can_eliminate_pawn = False
-                    can_escape_pawn = False
-                    for eat_piece in self.threaten_piece_at(new_pos):
-                        if eat_piece.id == forward_ch.belongto:
-                            can_eliminate_pawn = True
-                            break
-                    for reachable in MOVEMENT['k']:
-                        king_can_go = forward_pos + reachable
-                        cant_go = False
-                        for threating_piece in self.threaten_piece_at(
-                                king_can_go):
-                            if threating_piece.id != forward_ch.belongto:
-                                cant_go = True
-                                break
-                        if not cant_go:
-                            can_escape_pawn = True
-                            break
-                    if not can_eliminate_pawn and not can_escape_pawn:
-                        return False
+            return self.is_vaild_drop(piece, new_pos)
         else:
-            if self.piece_at(from_pos).is_empty_piece():
-                return False
-            from_piece = self.piece_at(from_pos)
-            if (from_piece.belongto != piece.belongto or
-                    #from_piece.promoted != piece.promoted or
-                    from_piece.id != piece.id):
-                return False
-            if from_piece.promoted != piece.promoted:
-                if from_piece.promoted:
-                    return False
-
-            delta_pos = new_pos - from_pos
-            find = False
-            now_id = from_piece.id
-            if from_piece.promoted:
-                now_id = 'g'
-            if from_piece.id == 'r':
-                delta_pos = Position.get_unit_way(from_pos, new_pos)
-                if from_piece.promoted:
-                    now_id = 'R'
-            for vaild_pos in MOVEMENT[now_id]:
-                _vaild_pos = copy(vaild_pos)
-                _vaild_pos.rotate(way)
-                if delta_pos == _vaild_pos:
-                    find = True
-            if not find:
-                return False
-        return True
+            return self.is_vaild_movement(piece, from_pos, new_pos)
 
     def next_turn(self) -> bool:
         if self.checkmated_player >= 3:
