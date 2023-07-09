@@ -1,4 +1,4 @@
-from .utils import Position
+from .position import Position
 from copy import copy
 
 def make_position_list(*args):

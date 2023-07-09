@@ -25,7 +25,7 @@ while True:
 
 from shogi.game import Game
 from shogi.piece import Piece
-from shogi.utils import Position
+from shogi.position import Position
 import os
 
 g = Game()

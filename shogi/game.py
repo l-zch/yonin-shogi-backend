@@ -1,6 +1,8 @@
 from .player import Player
 from .piece import Piece, INITIAL_BOARD, MOVEMENT
-from .utils import Position
+from .position import Position
+from .validator import Validator
+from .threaten import Threaten
 from copy import copy
 
 
@@ -37,128 +39,6 @@ class Game:
                 ch.id = c[0]
                 ch.belongto = i
                 self.create_threaten(ch, pos, i)
-                
-    def add_piece_to_set(self, pos, piece):
-        self.threaten_piece_at(pos).add(piece)
-        
-    def discard_piece_to_set(self, pos, piece):
-        self.threaten_piece_at(pos).discard(piece)
-
-    def handle_rock_line(self, threaten_piece, pos, func2):
-        #handle blocking or unblocking rock range line
-        for piece_r in self.threaten_piece_at(pos):
-            if piece_r.id == 'r':
-                unit_way = Position.get_unit_way(piece_r.pos, pos)
-                new_pos = pos + unit_way
-                while new_pos.is_vaild_pos():
-                    func2(new_pos, piece_r)
-                    self.threaten_piece_at(new_pos).discard(piece_r)
-                    if not self.piece_at(new_pos).is_empty_piece():
-                        break
-                    new_pos += unit_way
-
-    def handle_rock_threaten(self, threaten_piece, pos, func1):
-        if threaten_piece.promoted:
-            for reachable in MOVEMENT['R']:
-                new_pos = pos + reachable
-                func1(new_pos, threaten_piece)
-        for w in MOVEMENT['r']:
-            new_pos = pos + w
-            while new_pos.is_vaild_pos():
-                func1(new_pos, threaten_piece)
-                if not self.piece_at(new_pos).is_empty_piece():
-                    break
-                new_pos += w
-
-    def handle_rock_king(self, pos):
-        #if a king in a row or a col
-        for player in self.players:
-            if player.id == self.current_player.id:
-                continue
-            kp = player.king_pos
-            if kp.x == pos.x:
-                unit_way = Position.get_unit_way(kp, pos)
-                blockers = []
-                new_pos = kp + unit_way
-                while new_pos != pos:
-                    if not self.piece_at(new_pos).is_empty_piece():
-                        _ch = copy(self.piece_at(new_pos))
-                        _ch.init_threaten_piece(new_pos)
-                        blockers.append(_ch)
-                    new_pos += unit_way
-                if len(blockers) != 1:
-                    continue
-                if blockers[0].belongto == player.id:
-                    self.remove_threaten(blockers[0], blockers[0].pos, True)
-            elif kp.y == pos.y:
-                unit_way = Position.get_unit_way(kp, pos)
-                blockers = []
-                new_pos = kp + unit_way
-                while new_pos != pos:
-                    if not self.piece_at(new_pos).is_empty_piece():
-                        _ch = copy(self.piece_at(new_pos))
-                        _ch.init_threaten_piece(new_pos)
-                        blockers.append(_ch)
-                    new_pos += unit_way
-                if len(blockers) != 1:
-                    continue
-                if blockers[0].belongto == player.id:
-                    self.remove_threaten(blockers[0], blockers[0].pos, True)
-
-    def handle_blocker(self, threaten_piece, pos, func1):
-        for unit_way in MOVEMENT['r']:
-            new_pos = pos + unit_way
-            blockers = []
-            while new_pos.is_vaild_pos():
-                ch = self.piece_at(new_pos)
-                if ch.id == 'r' and ch.belongto != threaten_piece.belongto:
-                    if len(blockers) != 1:
-                        break
-                    if blockers[0].belongto == threaten_piece.belongto:
-                        self.remove_threaten(blockers[0], blockers[0].pos, True)
-                        two_way = [unit_way, unit_way * -1]
-                        for w in two_way:
-                            if w in MOVEMENT[blockers[0].id]:
-                                func1(blockers[0].pos + w, blockers[0])
-                    break
-                elif not ch.is_empty_piece():
-                    _ch = copy(ch)
-                    _ch.init_threaten_piece(new_pos)
-                    blockers.append(_ch)
-                new_pos += unit_way
-
-    def handle_threaten(self, threaten_piece, pos, only, func1, func2):
-        way = threaten_piece.belongto
-        if not only:
-            self.handle_rock_line(threaten_piece, pos, func2)
-            
-        if threaten_piece.id == 'r':
-            self.handle_rock_threaten(threaten_piece, pos, func1)
-            if not only:
-                self.handle_rock_king(pos)
-            return
-        
-        now_id = 'g' if threaten_piece.promoted else threaten_piece.id
-        for reachable in MOVEMENT[now_id]:
-            _reachable = copy(reachable)
-            _reachable.rotate(way)
-            new_pos = pos + _reachable
-            func1(new_pos, threaten_piece)
-
-        if threaten_piece.id == 'k':
-            self.handle_blocker(threaten_piece, pos, func1)
-    
-    def create_threaten(self, piece, pos, only=False):
-        threaten_piece = copy(piece)
-        threaten_piece.init_threaten_piece(pos)
-
-        self.handle_threaten(threaten_piece, pos, only, self.add_piece_to_set, self.discard_piece_to_set)
-
-    def remove_threaten(self, piece, pos, only=False):
-        threaten_piece = copy(piece)
-        threaten_piece.init_threaten_piece(pos)
-        
-        self.handle_threaten(threaten_piece, pos, only, self.discard_piece_to_set, self.add_piece_to_set)
 
     def piece_at(self, pos):
         if not pos.is_vaild_pos():
@@ -166,46 +46,25 @@ class Game:
         return self.board[pos.x][pos.y]
 
     def threaten_piece_at(self, pos):
-        if not pos or not pos.is_vaild_pos():
+        if isinstance(pos, Position) or not pos.is_vaild_pos():
             return set()
         return self.threaten_piece[pos.x][pos.y]
 
     #放子->合法性檢驗->王手檢驗->PASS
     def on_place(self, piece, from_pos, new_pos) -> bool:
-        debug = False
-        #vaildate pos
-        if not from_pos.is_vaild_pos() and not from_pos.is_empty_pos():
-            return False
-        if not new_pos.is_vaild_pos():
-            return False
-
         piece.belongto = self.current_player.id
 
-        #vaildate move
-        if not self.is_vaild_place(piece, from_pos, new_pos):
+        #vaildate
+        if not Validator.is_vaild_place(piece, from_pos, new_pos):
             return False
 
-        _old = None
-        from_piece = None
-        if not self.piece_at(new_pos).is_empty_piece():
-            _old = copy(self.piece_at(new_pos))
-        if not from_pos.is_empty_pos() and not self.piece_at(from_pos).is_empty_piece():
-            from_piece = copy(self.piece_at(from_pos))
+        eaten_piece = copy(self.piece_at(new_pos))
+        from_piece = Piece.empty_piece() if from_pos.is_empty_pos() else copy(self.piece_at(from_pos))
 
         #threaten
-        if _old is not None:
-            self.remove_threaten(_old, new_pos)
+        Threaten.remove_threaten(self, eaten_piece, new_pos)
         self.board[new_pos.x][new_pos.y] = piece.empty_piece()
-        if from_piece is not None:
-            self.remove_threaten(from_piece, from_pos)
-
-        #debug
-        if debug:
-            for i in range(9):
-                print('e' + str(i) + 's')
-                for de in self.threaten_piece_at(Position(4, i)):
-                    print(de)
-                print('e' + str(i) + 'e')
+        Threaten.remove_threaten(self, from_piece, from_pos)
 
         #if move from exist piece, update old pos piece
         if not from_pos.is_empty_pos():
@@ -213,12 +72,12 @@ class Game:
         else:
             self.current_player.holding_piece[piece.id] -= 1
         #get the piece on moving into
-        if _old is not None:
-            self.current_player.holding_piece[_old.id] += 1
+        if not eaten_piece.is_empty_piece():
+            self.current_player.holding_piece[eaten_piece.id] += 1
         self.board[new_pos.x][new_pos.y] = piece
 
         #threaten2
-        self.create_threaten(piece, new_pos)
+        Threaten.create_threaten(self, piece, new_pos)
 
         #update king pos
         if piece.id == 'k':
@@ -233,74 +92,39 @@ class Game:
                     print('kkk')
                     print(ch)
                 threatened = True
-                if not debug:
-                    break
+        
         if threatened:  #undo
             if piece.id == 'k':
                 self.current_player.king_pos = from_pos
-            self.remove_threaten(piece, new_pos)
-            if from_piece is not None:
+            Threaten.remove_threaten(self, piece, new_pos)
+            if not from_piece.is_empty_piece():
                 self.board[from_pos.x][from_pos.y] = from_piece
-                self.create_threaten(from_piece, from_pos)
+                Threaten.create_threaten(self, from_piece, from_pos)
             else:
                 self.current_player.holding_piece[piece.id] += 1
-            if _old is not None:
-                self.board[new_pos.x][new_pos.y] = _old
-                self.create_threaten(_old, new_pos)
-                self.current_player.holding_piece[_old.id] -= 1
+            if not eaten_piece.is_empty_piece():
+                self.board[new_pos.x][new_pos.y] = eaten_piece
+                Threaten.create_threaten(self, eaten_piece, new_pos)
+                self.current_player.holding_piece[eaten_piece.id] -= 1
             else:
                 self.board[new_pos.x][new_pos.y] = Piece.empty_piece()
             return False
 
         self.next_turn()
-
-        #debug
-        if debug:
-            for i in range(9):
-                print('d' + str(i) + 's')
-                for de in self.threaten_piece_at(Position(4, i)):
-                    print(de)
-                print('d' + str(i) + 'e')
         return True
 
-    def is_vaild_movement(self, piece, from_pos, new_pos):
-        if self.piece_at(from_pos).is_empty_piece():
-                return False
-        from_piece = self.piece_at(from_pos)
-        if (from_piece.belongto != piece.belongto or
-                #from_piece.promoted != piece.promoted or
-                from_piece.id != piece.id):
-            return False
-        if from_piece.promoted != piece.promoted:
-            if from_piece.promoted:
-                return False
-
-        facing = self.current_player.id
-        delta_pos = new_pos - from_pos
-        find = False
-        now_id = 'g' if from_piece.promoted else from_piece.id
-        if from_piece.id == 'r':
-            delta_pos = Position.get_unit_way(from_pos, new_pos)
-            now_id = 'R' if from_piece.promoted else now_id
-        for vaild_pos in MOVEMENT[now_id]:
-            _vaild_pos = copy(vaild_pos)
-            _vaild_pos.rotate(facing)
-            if delta_pos == _vaild_pos:
-                find = True
-        return find
-
-    def is_checkmate(self, piece, new_pos, king_pos):
+    def is_checkmate(game, piece, new_pos, king_pos):
         can_eliminate_piece = False
         can_escape_piece = False
-        king_piece = self.piece_at(king_pos)
-        for eat_piece in self.threaten_piece_at(new_pos):
+        king_piece = game.piece_at(king_pos)
+        for eat_piece in game.threaten_piece_at(new_pos):
             if eat_piece.id == king_piece.belongto:
                 can_eliminate_piece = True
                 break
         for reachable in MOVEMENT['k']:
             king_can_go = king_pos + reachable
             cant_go = False
-            for threating_piece in self.threaten_piece_at(king_can_go):
+            for threating_piece in game.threaten_piece_at(king_can_go):
                 if threating_piece.id != king_piece.belongto:
                     cant_go = True
                     break
@@ -308,57 +132,6 @@ class Game:
                 can_escape_piece = True
                 break
         return can_eliminate_piece or can_escape_piece
-
-    def is_vaild_drop(self, piece, new_pos):
-        if not self.piece_at(new_pos).is_empty_piece():
-            return False
-        left_in_hand = self.current_player.holding_piece[piece.id]
-        if not left_in_hand or left_in_hand <= 0:
-            return False
-        if piece.promoted:
-            return False
-        if piece.id != 'p':
-            return True
-        facing = self.current_player.id
-        if facing % 2 == 0:
-            if ((new_pos.x == 0 and facing == 0)
-            or (new_pos.x == 8 and facing == 2)):
-                return False
-            for row in range(9):
-                ch = self.board[row][new_pos.y]
-                if ch.belongto == facing and ch.id == 'p':
-                    return False
-        else:
-            if ((new_pos.y == 8 and facing == 1)
-            or (new_pos.y == 0 and facing == 3)):
-                return False
-            for col in range(9):
-                ch = self.board[new_pos.x][col]
-                if ch.belongto == facing and ch.id == 'p':
-                    return False
-        unit_forward = Position(0, 1)
-        unit_forward.rotate(facing)
-        forward_pos = new_pos + unit_forward
-        forward_ch = self.piece_at(forward_pos)
-        if forward_ch.id == 'k' and forward_ch.belongto != facing:  #打步詰
-            return self.is_checkmate(piece, new_pos, forward_pos)
-        else:
-            return True
-    
-    
-    def is_vaild_place(self, piece, from_pos, new_pos) -> bool:
-        # 檢查持駒or移動合法 f
-        # 打步詰 f
-        # 二步 f
-        # 打入位置合法 f
-        # 新位置若有棋非己方棋才可移動過去 f
-        # 若升變，升變是否合法
-        if self.piece_at(new_pos).belongto == self.current_player.id:
-            return False
-        if from_pos.is_empty_pos():
-            return self.is_vaild_drop(piece, new_pos)
-        else:
-            return self.is_vaild_movement(piece, from_pos, new_pos)
 
     def next_turn(self) -> bool:
         if self.checkmated_player >= 3:
