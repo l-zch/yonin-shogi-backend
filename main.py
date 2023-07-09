@@ -106,7 +106,7 @@ class NameSpace(AsyncNamespace):
         origin, destination, promotion = data
         x, y = origin
         piece = deepcopy(game.board[x][y])
-        piece.promoted = promotion
+        piece.promoted |= promotion
         # move the piece
         if game.on_place(piece, Position(*origin),
                          Position(*destination)):
