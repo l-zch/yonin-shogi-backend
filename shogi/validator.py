@@ -19,10 +19,12 @@ class Validator:
             return False
         if game.piece_at(new_pos).belongto == game.current_player.id:
             return False
+        if game.piece_at(new_pos).id == 'k':
+            return False
         if from_pos.is_empty_pos():
-            return cls.is_vaild_drop(piece, new_pos)
+            return cls.is_vaild_drop(game, piece, new_pos)
         else:
-            return cls.is_vaild_movement(piece, from_pos, new_pos)
+            return cls.is_vaild_movement(game, piece, from_pos, new_pos)
 
     @staticmethod
     def is_vaild_movement(game, piece, from_pos, new_pos):
@@ -49,10 +51,19 @@ class Validator:
             _vaild_pos.rotate(facing)
             if delta_pos == _vaild_pos:
                 find = True
+        if not find:
+            return False
+        if from_piece.id != 'r':
+            return find
+        tmp_pos = copy(from_pos) + delta_pos
+        while tmp_pos != new_pos:
+            if not game.piece_at(tmp_pos).is_empty_piece():
+                find = False
+            tmp_pos += delta_pos
         return find
 
-    @staticmethod
-    def is_vaild_drop(game, piece, new_pos):
+    @classmethod
+    def is_vaild_drop(cls, game, piece, new_pos):
         if not game.piece_at(new_pos).is_empty_piece():
             return False
         left_in_hand = game.current_player.holding_piece[piece.id]
@@ -63,6 +74,18 @@ class Validator:
         if piece.id != 'p':
             return True
         facing = game.current_player.id
+        if not cls.is_vaild_drop_pawn(game, new_pos, facing):
+            return False
+        unit_forward = Position(-1, 0)
+        unit_forward.rotate(facing)
+        forward_pos = new_pos + unit_forward
+        forward_ch = game.piece_at(forward_pos)
+        if forward_ch.id == 'k' and forward_ch.belongto != facing:  #打步詰
+            return not game.checkmate_normal(new_pos, game.players[forward_ch.belongto])
+        else:
+            return True
+
+    def is_vaild_drop_pawn(game, new_pos, facing):
         if facing % 2 == 0:
             if ((new_pos.x == 0 and facing == 0)
             or (new_pos.x == 8 and facing == 2)):
@@ -79,13 +102,6 @@ class Validator:
                 ch = game.board[new_pos.x][col]
                 if ch.belongto == facing and ch.id == 'p':
                     return False
-        unit_forward = Position(0, 1)
-        unit_forward.rotate(facing)
-        forward_pos = new_pos + unit_forward
-        forward_ch = game.piece_at(forward_pos)
-        if forward_ch.id == 'k' and forward_ch.belongto != facing:  #打步詰
-            return game.is_checkmate(piece, new_pos, forward_pos)
-        else:
-            return True
+        return True
 
     

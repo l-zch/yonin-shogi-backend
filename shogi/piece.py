@@ -34,7 +34,8 @@ class Piece:
         self.pos = None#debug
 
     def init_threaten_piece(self, pos):
-        self.pos = copy(pos)
+        if self.pos is None:
+            self.pos = copy(pos)
 
     def is_empty_piece(self):
         return self.id == 'None'

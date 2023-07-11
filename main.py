@@ -83,10 +83,11 @@ def create_response(game):
     pieces = list(chain(*[row for row in game.board]))
     return [
         [{
-        'type': convert(piece),
-        'owner': piece.belongto
-    } for piece in pieces],
-        [{'piecesInHand': list(player.holding_piece.values())} for player in game.players],
+            'type': convert(piece),
+            'owner': piece.belongto
+        } for piece in pieces],
+        [{'piecesInHand': list(player.holding_piece.values()),
+          'checkmated':player.checkmated} for player in game.players],
         game.current_player.id
     ]
 
