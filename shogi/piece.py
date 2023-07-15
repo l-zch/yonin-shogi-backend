@@ -26,16 +26,11 @@ INITIAL_BOARD = [('s', -2, 0), ('g', -1, 0), ('p', -1, 1), ('p', 0, 2), ('r', 0,
 
 class Piece:
 
-    #步 香 桂 銀 金 角 飛 王(p~k)
     def __init__(self, id):
         self.id = id
         self.promoted = False
         self.belongto = -1
-        self.pos = None#debug
-
-    def init_threaten_piece(self, pos):
-        if self.pos is None:
-            self.pos = copy(pos)
+        self.pos = None
 
     def is_empty_piece(self):
         return self.id == 'None'
@@ -74,6 +69,4 @@ class Piece:
         return hash(str(self))
 
     def __str__(self):
-        if self.pos is not None:#
-            return "id=" + self.id + ",promoted=" + str(self.promoted) + ",belongto=" + str(self.belongto) + ",pos=" + str(self.pos)#
-        return "id=" + self.id + ",promoted=" + str(self.promoted) + ",belongto=" + str(self.belongto)
+        return "id=" + self.id + ",promoted=" + str(self.promoted) + ",belongto=" + str(self.belongto) + ",pos=" + str(self.pos)#

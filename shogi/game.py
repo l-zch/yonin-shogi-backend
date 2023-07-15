@@ -3,7 +3,7 @@ from .piece import Piece, INITIAL_BOARD, MOVEMENT
 from .position import Position
 from .validator import Validator
 from copy import copy
-import time
+import numpy as np
 
 
 class Game:
@@ -92,26 +92,27 @@ class Game:
     def undo_move(self, piece, eaten_piece, from_piece, new_pos):
         self.board[new_pos.x][new_pos.y] = eaten_piece
         from_piece = piece
+
+    def try_place(self, pos):
+        for kv in filter(lambda kv: kv[1] > 0, player.holding_piece.items()):
+            ch = Piece(kv[0])
+            ch.belongto = player.id
+            if Validator.is_vaild_place(self, ch, Position.empty_pos(), pos):
+                eaten_piece, from_piece = self.if_move(ch, Position.empty_pos(), pos)
+                if not self.is_threatened(player):
+                    self.undo_move(ch, eaten_piece, from_piece, pos)
+                    return True
+                self.undo_move(ch, eaten_piece, from_piece, pos)
+        return False
     
     def is_checkmated(self, new_pos, player):
         king_pos = player.king_pos
         king_piece = self.piece_at(king_pos)
-        for i, row in enumerate(self.board):
-            for j, col in enumerate(row):
-                if col.belongto == player.id and Validator.is_vaild_place(self, col, Position(i, j), new_pos):
-                    return False
-                if col.is_empty_piece():
-                    for id, __ in player.holding_piece.items():
-                        if __ == 0:
-                            continue
-                        ch = Piece(id)
-                        ch.belongto = player.id
-                        if Validator.is_vaild_place(self, ch, Position.empty_pos(), Position(i, j)):
-                            eaten_piece, from_piece = self.if_move(ch, Position.empty_pos(), Position(i, j))
-                            if not self.is_threatened(player):
-                                self.undo_move(ch, eaten_piece, from_piece, Position(i, j))
-                                return False
-                            self.undo_move(ch, eaten_piece, from_piece, Position(i, j))
+        for idx, val in np.ndenumerate(self.board):
+            if val.belongto == player.id and Validator.is_vaild_place(self, val, Position(idx[0], idx[1]), new_pos):
+                return False
+            if val.is_empty_piece() and self.try_place(Position(idx[0], idx[1])):
+                return False
         for reachable in MOVEMENT['k']:
             king_can_go = king_pos + reachable
             if not king_can_go.is_vaild_pos():
