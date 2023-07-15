@@ -81,10 +81,11 @@ class Validator:
         forward_pos = new_pos + unit_forward
         forward_ch = game.piece_at(forward_pos)
         if forward_ch.id == 'k' and forward_ch.belongto != facing:  #打步詰
-            return not game.checkmate_normal(new_pos, game.players[forward_ch.belongto])
+            return not game.is_checkmated(new_pos, game.players[forward_ch.belongto])
         else:
             return True
 
+    @staticmethod
     def is_vaild_drop_pawn(game, new_pos, facing):
         if facing % 2 == 0:
             if ((new_pos.x == 0 and facing == 0)
