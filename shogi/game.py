@@ -93,7 +93,7 @@ class Game:
         self.board[new_pos.x][new_pos.y] = eaten_piece
         from_piece = piece
 
-    def try_place(self, pos):
+    def try_place(self, pos, player):
         for kv in filter(lambda kv: kv[1] > 0, player.holding_piece.items()):
             ch = Piece(kv[0])
             ch.belongto = player.id
@@ -111,7 +111,7 @@ class Game:
         for idx, val in np.ndenumerate(self.board):
             if val.belongto == player.id and Validator.is_vaild_place(self, val, Position(idx[0], idx[1]), new_pos):
                 return False
-            if val.is_empty_piece() and self.try_place(Position(idx[0], idx[1])):
+            if val.is_empty_piece() and self.try_place(Position(idx[0], idx[1]), player):
                 return False
         for reachable in MOVEMENT['k']:
             king_can_go = king_pos + reachable
