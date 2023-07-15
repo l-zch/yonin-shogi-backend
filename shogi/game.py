@@ -2,7 +2,7 @@ from .player import Player
 from .piece import Piece, INITIAL_BOARD, MOVEMENT
 from .position import Position
 from .validator import Validator
-from copy import copy
+from copy import copy, deepcopy
 import numpy as np
 
 
@@ -93,11 +93,11 @@ class Game:
         self.board[new_pos.x][new_pos.y] = eaten_piece
         from_piece = piece
 
-    def try_place(self, pos, player):
+    def try_drop(self, pos, player):
         for kv in filter(lambda kv: kv[1] > 0, player.holding_piece.items()):
             ch = Piece(kv[0])
             ch.belongto = player.id
-            if Validator.is_vaild_place(self, ch, Position.empty_pos(), pos):
+            if Validator.is_vaild_drop(self, ch, pos, True):
                 eaten_piece, from_piece = self.if_move(ch, Position.empty_pos(), pos)
                 if not self.is_threatened(player):
                     self.undo_move(ch, eaten_piece, from_piece, pos)
@@ -106,12 +106,15 @@ class Game:
         return False
     
     def is_checkmated(self, new_pos, player):
-        king_pos = player.king_pos
+        def on_a_line(pos1, pos2):
+            return pos1.x == pos2.x or pos1.y == pos2.y
+        king_pos = copy(player.king_pos)
         king_piece = self.piece_at(king_pos)
         for idx, val in np.ndenumerate(self.board):
-            if val.belongto == player.id and Validator.is_vaild_place(self, val, Position(idx[0], idx[1]), new_pos):
+            pos = Position(*idx)
+            if val.belongto == player.id and Validator.is_vaild_place(self, val, pos, new_pos):
                 return False
-            if val.is_empty_piece() and self.try_place(Position(idx[0], idx[1]), player):
+            if val.is_empty_piece() and on_a_line(king_pos, pos) and self.try_drop(pos, player):
                 return False
         for reachable in MOVEMENT['k']:
             king_can_go = king_pos + reachable
@@ -120,10 +123,13 @@ class Game:
             if self.piece_at(king_can_go).belongto == king_piece.belongto:
                 continue
             eaten_piece, from_piece = self.if_move(king_piece, king_pos, king_can_go)
+            player.king_pos = king_can_go
             if not self.is_threatened(player):
                 self.undo_move(king_piece, eaten_piece, from_piece, king_can_go)
+                player.king_pos = king_pos
                 return False
             self.undo_move(king_piece, eaten_piece, from_piece, king_can_go)
+            player.king_pos = king_pos
         return True
 
     def is_threatened(self, player):
@@ -134,7 +140,7 @@ class Game:
             if ch.is_empty_piece() or ch.belongto == player.id:
                 continue
             _reachable = copy(reachable) * -1
-            if _reachable in MOVEMENT[ch.id]:
+            if _reachable in map(lambda way: way.rotate(ch.belongto), deepcopy(MOVEMENT[ch.id if not ch.promoted else 'g' if ch.id != 'r' else 'R'])):
                 return True
         for ranged in MOVEMENT['r']:
             pos = copy(king_pos) + ranged

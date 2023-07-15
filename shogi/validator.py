@@ -63,7 +63,7 @@ class Validator:
         return find
 
     @classmethod
-    def is_vaild_drop(cls, game, piece, new_pos):
+    def is_vaild_drop(cls, game, piece, new_pos, blocker = False):
         if not game.piece_at(new_pos).is_empty_piece():
             return False
         left_in_hand = game.current_player.holding_piece[piece.id]
@@ -80,7 +80,7 @@ class Validator:
         unit_forward.rotate(facing)
         forward_pos = new_pos + unit_forward
         forward_ch = game.piece_at(forward_pos)
-        if forward_ch.id == 'k' and forward_ch.belongto != facing:  #打步詰
+        if forward_ch.id == 'k' and forward_ch.belongto != facing and not blocker:  #打步詰
             return not game.is_checkmated(new_pos, game.players[forward_ch.belongto])
         else:
             return True

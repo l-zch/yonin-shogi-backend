@@ -33,6 +33,7 @@ class Position:
             self.x, self.y = -self.x, -self.y
         elif n == 3:
             self.x, self.y = -self.y, self.x
+        return self
 
     def is_empty_pos(self):
         return self.x == -10 and self.y == -10
